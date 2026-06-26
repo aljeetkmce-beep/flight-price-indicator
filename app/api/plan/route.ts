@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { cachedSearchFlights } from "@/lib/cache";
+import { searchFlights } from "@/lib/skyscanner";
 import { getUsdToInr } from "@/lib/exchange";
 import { AIRPORT_NAMES } from "@/types";
 
@@ -97,7 +96,7 @@ export async function GET(request: NextRequest) {
   console.log(`[plan] received origins=${JSON.stringify(origins)} destination=${destination} date=${date}`);
   console.log(`[plan] expanded to ${pairs.length} pairs: ${pairs.map(p => `${p.origin}/${p.date}`).join(", ")}`);
 
-  type FulfilledVal = { origin: string; date: string; result: Awaited<ReturnType<typeof cachedSearchFlights>> };
+  type FulfilledVal = { origin: string; date: string; result: Awaited<ReturnType<typeof searchFlights>> };
   type Settled = { status: "fulfilled"; value: FulfilledVal } | { status: "rejected"; reason: unknown };
   const settled: Settled[] = [];
 
@@ -105,7 +104,7 @@ export async function GET(request: NextRequest) {
     const { origin, date: d } = pairs[i];
     console.log(`[plan] [${i + 1}/${pairs.length}] requesting ${origin} → ${destination} on ${d}`);
     try {
-      const result = await cachedSearchFlights(origin, destination, d);
+      const result = await searchFlights(origin, destination, d);
       console.log(`[plan] [${i + 1}/${pairs.length}] OK — ${result.options.length} options`);
       settled.push({ status: "fulfilled", value: { origin, date: d, result } });
     } catch (err) {
@@ -191,36 +190,7 @@ export async function GET(request: NextRequest) {
     bestAirline: recommended.airline,
   };
 
-  // Persist to DB (non-fatal)
-  try {
-    for (const row of rows) {
-      const route = await db.route.upsert({
-        where: { origin_destination: { origin: row.origin, destination: row.destination } },
-        update: {},
-        create: {
-          origin: row.origin,
-          destination: row.destination,
-          originCity: row.originCity,
-          destCity: row.destCity,
-        },
-      });
-      await db.priceRecord.create({
-        data: {
-          routeId: route.id,
-          price: row.priceINR / exchangeRate,
-          currency: "USD",
-          airline: row.airline,
-          stops: row.stops,
-          duration: row.duration,
-          layover: row.layoverMins,
-          departDate: new Date(row.date + "T00:00:00Z"),
-          tripType: "one_way",
-        },
-      });
-    }
-  } catch {
-    // non-fatal
-  }
+  // TODO: Persist price records to Supabase/PostgreSQL for historical analytics
 
   return NextResponse.json({
     success: true,

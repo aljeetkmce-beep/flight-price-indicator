@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { cachedSearchFlights } from "@/lib/cache";
+import { searchFlights } from "@/lib/skyscanner";
 import { getUsdToInr } from "@/lib/exchange";
 import { AIRPORT_NAMES } from "@/types";
 
@@ -116,7 +115,7 @@ export async function GET(request: NextRequest) {
 
   const settled = await Promise.allSettled(
     pairs.map(({ origin, searchDate, candidateDate }) =>
-      cachedSearchFlights(origin, destination, searchDate).then((result) => ({
+      searchFlights(origin, destination, searchDate).then((result) => ({
         origin,
         searchDate,
         candidateDate,
@@ -211,36 +210,7 @@ export async function GET(request: NextRequest) {
   const decision: "BOOK NOW" | "WAIT" =
     recommended.priceINR < avgPriceINR * 0.9 ? "BOOK NOW" : "WAIT";
 
-  // Persist final options to DB (non-fatal)
-  try {
-    for (const row of finalOptions) {
-      const route = await db.route.upsert({
-        where: { origin_destination: { origin: row.origin, destination: row.destination } },
-        update: {},
-        create: {
-          origin: row.origin,
-          destination: row.destination,
-          originCity: row.originCity,
-          destCity: row.destCity,
-        },
-      });
-      await db.priceRecord.create({
-        data: {
-          routeId: route.id,
-          price: row.priceINR / exchangeRate,
-          currency: "USD",
-          airline: row.airline,
-          stops: row.stops,
-          duration: row.duration,
-          layover: row.layoverMins,
-          departDate: new Date(row.date + "T00:00:00Z"),
-          tripType: "one_way",
-        },
-      });
-    }
-  } catch {
-    // non-fatal
-  }
+  // TODO: Persist finalOptions to Supabase/PostgreSQL for historical analytics
 
   return NextResponse.json({
     success: true,

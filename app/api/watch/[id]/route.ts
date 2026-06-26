@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+
+const DB_UNAVAILABLE = NextResponse.json(
+  { success: false, error: "Database not configured. Set DATABASE_URL to enable Price Watch." },
+  { status: 503 }
+);
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  if (!process.env.DATABASE_URL) return DB_UNAVAILABLE;
+  const { db } = await import("@/lib/db");
+
   const id = parseInt(params.id, 10);
   if (isNaN(id)) return NextResponse.json({ success: false, error: "Invalid id" }, { status: 400 });
 
@@ -30,6 +37,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  if (!process.env.DATABASE_URL) return DB_UNAVAILABLE;
+  const { db } = await import("@/lib/db");
+
   const id = parseInt(params.id, 10);
   if (isNaN(id)) return NextResponse.json({ success: false, error: "Invalid id" }, { status: 400 });
 

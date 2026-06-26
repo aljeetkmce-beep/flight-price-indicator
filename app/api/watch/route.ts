@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
 import { searchFlights } from "@/lib/skyscanner";
 import { getUsdToInr } from "@/lib/exchange";
 
+const DB_UNAVAILABLE = NextResponse.json(
+  { success: false, error: "Database not configured. Set DATABASE_URL to enable Price Watch." },
+  { status: 503 }
+);
+
 export async function GET() {
+  if (!process.env.DATABASE_URL) return DB_UNAVAILABLE;
+  const { db } = await import("@/lib/db");
   const watches = await db.watch.findMany({
     orderBy: { createdAt: "desc" },
   });
@@ -11,6 +17,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  if (!process.env.DATABASE_URL) return DB_UNAVAILABLE;
+  const { db } = await import("@/lib/db");
+
   try {
     const body = await req.json();
     const {

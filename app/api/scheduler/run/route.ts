@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkDueWatches, runWatchNow } from "@/lib/scheduler";
 
 export async function POST(req: NextRequest) {
+  if (!process.env.DATABASE_URL) {
+    return NextResponse.json(
+      { success: false, error: "Database not configured. Set DATABASE_URL to enable scheduling." },
+      { status: 503 }
+    );
+  }
+
   try {
+    const { checkDueWatches, runWatchNow } = await import("@/lib/scheduler");
     const body = await req.json().catch(() => ({})) as { watchId?: number };
 
     if (body.watchId !== undefined) {

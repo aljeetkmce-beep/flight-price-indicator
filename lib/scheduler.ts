@@ -1,5 +1,4 @@
 import type { ScheduledTask } from "node-cron";
-import { db } from "./db";
 import { searchFlights } from "./skyscanner";
 import { getUsdToInr } from "./exchange";
 import { sendAlertEmail, sendWhatsAppAlert } from "./mailer";
@@ -8,6 +7,10 @@ import type { Watch } from "@prisma/client";
 let cronTask: ScheduledTask | null = null;
 
 export function startScheduler(): void {
+  if (!process.env.DATABASE_URL) {
+    console.log("[scheduler] DATABASE_URL not set — scheduler disabled");
+    return;
+  }
   if (cronTask) return;
   import("node-cron").then(({ default: cron }) => {
     cronTask = cron.schedule("* * * * *", () => { void checkDueWatches(); });
@@ -28,6 +31,10 @@ function todayStr(): string {
 
 /** Called every minute by cron; also exposed for manual triggers. */
 export async function checkDueWatches(): Promise<{ checked: number; errors: string[] }> {
+  if (!process.env.DATABASE_URL) {
+    return { checked: 0, errors: ["DATABASE_URL not configured"] };
+  }
+  const { db } = await import("./db");
   const time = localHHMM();
   const today = todayStr();
 
@@ -54,6 +61,8 @@ export async function checkDueWatches(): Promise<{ checked: number; errors: stri
 
 /** Run a single watch immediately (used by the "Check Now" API). */
 export async function runWatchNow(watchId: number): Promise<void> {
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL not configured");
+  const { db } = await import("./db");
   const w = await db.watch.findUnique({ where: { id: watchId } });
   if (!w) throw new Error(`Watch ${watchId} not found`);
   if (w.status !== "active") throw new Error(`Watch ${watchId} is ${w.status}`);
@@ -61,6 +70,7 @@ export async function runWatchNow(watchId: number): Promise<void> {
 }
 
 async function processWatch(watch: Watch, today: string): Promise<void> {
+  const { db } = await import("./db");
   console.log(`[scheduler] Checking watch ${watch.id}: ${watch.origin} → ${watch.destination} on ${watch.travelDate}`);
 
   const exchangeRate = await getUsdToInr().catch(() => 84);

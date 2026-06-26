@@ -13,15 +13,13 @@ datasource db {
 // -------------------------------------------------------
 // Route
 // Represents one origin → destination pair.
-// Fixed set: 3 origins × 5 destinations = 15 routes.
-// Seeded once via scripts/seed.ts
 // -------------------------------------------------------
 model Route {
   id          Int     @id @default(autoincrement())
-  origin      String  // IATA airport code: TRV, COK, BLR
-  destination String  // IATA airport code: BKK, DMK, HKT, KBV, CNX
-  originCity  String  // Human-readable: Trivandrum, Kochi, Bangalore
-  destCity    String  // Human-readable: Bangkok, Bangkok Don Mueang, Phuket, Krabi, Chiang Mai
+  origin      String  // IATA airport code
+  destination String  // IATA airport code
+  originCity  String
+  destCity    String
   active      Boolean @default(true)
 
   prices PriceRecord[]
@@ -34,56 +32,30 @@ model Route {
 // -------------------------------------------------------
 // PriceRecord
 // One row = one price snapshot for a route on a specific date.
-// Fetched daily by the automation script (Phase 5).
 // -------------------------------------------------------
 model PriceRecord {
   id       Int   @id @default(autoincrement())
   routeId  Int
   route    Route @relation(fields: [routeId], references: [id])
 
-  price    Float   // Price in the specified currency
+  price    Float
   currency String  @default("USD")
 
-  airline  String? // Carrier name or IATA code (e.g. "IndiGo", "6E")
-  stops    Int     @default(0) // 0 = direct, 1 = one stop, 2 = two stops
-  duration String? // Total travel time, e.g. "9h 30m"
-  layover  Int?    // Layover in minutes; 0 for direct, null if unknown
+  airline  String?
+  stops    Int     @default(0)
+  duration String?
+  layover  Int?
 
-  departDate DateTime  // The departure date this price applies to
-  returnDate DateTime? // Set only for round trips
-  tripType   String    @default("one_way") // "one_way" | "round_trip"
+  departDate DateTime
+  returnDate DateTime?
+  tripType   String    @default("one_way")
 
-  fetchedAt DateTime @default(now()) // Timestamp when this record was saved
+  fetchedAt DateTime @default(now())
 
   @@index([routeId])
   @@index([fetchedAt])
   @@index([departDate])
   @@index([routeId, departDate])
-}
-
-// -------------------------------------------------------
-// CachedFlight
-// One row per flight option returned by the Skyscanner API.
-// Cache is valid for 24 hours — checked before any live API call.
-// -------------------------------------------------------
-model CachedFlight {
-  id            Int      @id @default(autoincrement())
-  origin        String
-  destination   String
-  date          String   // YYYY-MM-DD departure date searched
-  airline       String
-  flightNumbers String
-  price         Float    // USD
-  stops         Int
-  duration      String   // e.g. "9h 30m"
-  durationMins  Int
-  departureTime String   // "HH:mm"
-  arrivalTime   String   // "HH:mm"
-  layoverMins   Int
-  cachedAt      DateTime @default(now())
-
-  @@index([origin, destination, date])
-  @@index([cachedAt])
 }
 
 // -------------------------------------------------------
@@ -93,21 +65,21 @@ model CachedFlight {
 // -------------------------------------------------------
 model Watch {
   id                  Int       @id @default(autoincrement())
-  origin              String    // IATA code
-  destination         String    // IATA code
+  origin              String
+  destination         String
   travelDate          String    // YYYY-MM-DD
-  maxStops            Int?      // null = Any; 0/1/2 for specific limits
-  maxLayoverHours     Float?    // null = no limit
+  maxStops            Int?
+  maxLayoverHours     Float?
   monitoringStartDate String    // YYYY-MM-DD
-  checkTime           String    // "HH:MM" 24-h, e.g. "10:00"
+  checkTime           String    // "HH:MM" 24-h
   alertType           String    // "below_threshold" | "new_lowest" | "both"
-  thresholdPrice      Float?    // INR; required when alertType includes below_threshold
+  thresholdPrice      Float?    // INR
   email               String
   whatsapp            String?
   status              String    @default("active") // "active" | "paused"
-  currentFare         Float?    // INR — updated after each check
-  lowestFareSeen      Float?    // INR
-  highestFareSeen     Float?    // INR
+  currentFare         Float?
+  lowestFareSeen      Float?
+  highestFareSeen     Float?
   lastCheckedAt       DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
@@ -120,7 +92,6 @@ model Watch {
 // -------------------------------------------------------
 // PriceHistory
 // One row per daily fare snapshot for a Watch.
-// Never deleted individually; removed via cascade when Watch is deleted.
 // -------------------------------------------------------
 model PriceHistory {
   id          Int      @id @default(autoincrement())
@@ -138,14 +109,13 @@ model PriceHistory {
 // -------------------------------------------------------
 // FetchLog
 // Tracks each automated fetch run for observability.
-// Useful for debugging and knowing when data was last refreshed.
 // -------------------------------------------------------
 model FetchLog {
   id        Int      @id @default(autoincrement())
   startedAt DateTime @default(now())
   finishedAt DateTime?
-  status    String   @default("running") // "running" | "success" | "failed"
-  message   String?  // Error message if status = "failed"
+  status    String   @default("running")
+  message   String?
   recordsFetched Int @default(0)
 
   @@index([startedAt])
